@@ -17,7 +17,7 @@ class HessianCELoss(nn.Module):
         self.net = net
         self.config = config
         self.cross_entropy = nn.CrossEntropyLoss()
-        self.l1_loss = nn.MSELoss() # nn.L1Loss()
+        self.l1_loss = nn.L1Loss()
 
     def forward(self, x, y, perturbations=None):
         """
