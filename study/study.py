@@ -3,6 +3,7 @@ from optuna import create_study
 from optuna.samplers import TPESampler, GridSampler
 from omegaconf import DictConfig, OmegaConf
 
+import torch
 from torch.utils.tensorboard.writer import SummaryWriter
 import pandas as pd
 import os
@@ -113,8 +114,10 @@ class Study:
 
         trial_id = str(trial.number) if trial else None
 
+
         run_data = []
         for run_num in range(total_runs):
+            torch.cuda.empty_cache()
             runner_config = self.study_config.make_runner_config_dict(run_num, trial, trial_id)
             runner = create_runner(runner_config)
             runner.train()
