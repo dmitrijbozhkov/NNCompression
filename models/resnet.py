@@ -7,13 +7,10 @@
     Deep Residual Learning for Image Recognition
     https://arxiv.org/abs/1512.03385v1
 """
-import torch
 import torch.nn as nn
 
 class BasicBlock(nn.Module):
-    """Basic Block for resnet 18 and resnet 34
-
-    """
+    """Basic Block for resnet 18 and resnet 34"""
 
     #BasicBlock and BottleNeck block
     #have different output size
@@ -48,10 +45,10 @@ class BasicBlock(nn.Module):
         return nn.ReLU(inplace=True)(self.residual_function(x) + self.shortcut(x))
 
 class BottleNeck(nn.Module):
-    """Residual block for resnet over 50 layers
+    """Residual block for resnet over 50 layers"""
 
-    """
     expansion = 2 # Was 4
+
     def __init__(self, in_channels, out_channels, stride=1):
         super().__init__()
         self.residual_function = nn.Sequential(
@@ -97,7 +94,7 @@ class ResNet(nn.Module):
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
     def _make_layer(self, block, out_channels, num_blocks, stride):
-        """make resnet layers(by layer i didnt mean this 'layer' was the
+        '''make resnet layers(by layer i didnt mean this 'layer' was the
         same as a neuron netowork layer, ex. conv layer), one layer may
         contain more than one residual block
 
@@ -109,7 +106,7 @@ class ResNet(nn.Module):
 
         Return:
             return a resnet layer
-        """
+        '''
 
         # we have num_block blocks per layer, the first block
         # could be 1 or 2, other blocks would always be 1
@@ -134,21 +131,21 @@ class ResNet(nn.Module):
         return output
 
 
-def resnet18(num_classes=10):
+def resnet18_cifar(num_classes=10):
     return ResNet(BasicBlock, [2, 2, 2, 2], num_classes)
 
 
-def resnet34(num_classes=10):
+def resnet34_cifar(num_classes=10):
     return ResNet(BasicBlock, [3, 4, 6, 3], num_classes)
 
 
-def resnet50(num_classes=10):
+def resnet50_cifar(num_classes=10):
     return ResNet(BasicBlock, [3, 4, 6, 3], num_classes)
 
 
-def resnet101(num_classes=10):
+def resnet101_cifar(num_classes=10):
     return ResNet(BasicBlock, [3, 4, 23, 3], num_classes)
 
 
-def resnet152(num_classes=10):
+def resnet152_cifar(num_classes=10):
     return ResNet(BasicBlock, [3, 8, 36, 3], num_classes)

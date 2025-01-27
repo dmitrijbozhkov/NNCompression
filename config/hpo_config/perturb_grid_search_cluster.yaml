@@ -1,9 +1,0 @@
-defaults:
-  - search_space: perturb_grid
-
-database: "sqlite:////run/media/dima/Scratch/perturb_experiment/hp_data/perturb_grid_search.db"
-opt_direction: maximize
-hp_sampler: grid
-n_trials: 200000
-optimization_objective: test_accuracy
-is_hpo: true

@@ -4,7 +4,7 @@ weight_decay: 0
 epoch: 300
 dataset: cifar100
 is_dataset_canon_split: True
-model: resnet50
+model: resnet50_cifar
 
 optimizer_type: adam
 

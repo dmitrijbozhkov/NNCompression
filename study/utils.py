@@ -4,6 +4,7 @@ import json
 import hashlib
 import torch
 
+
 def get_device(runner_config: dict):
     if not runner_config["gpu"]:
         if torch.cuda.is_available():
@@ -20,6 +21,7 @@ def get_last_run_epochs(run_df):
     """
     run_max_epochs = run_df.groupby("run_num")["epoch_num"].max().reset_index()
     return pd.merge(run_df, run_max_epochs, on=["run_num", "epoch_num"])
+
 
 def get_run_stats(run_df, group_by_epoch=True):
     """

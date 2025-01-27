@@ -156,6 +156,7 @@ class Runner:
             self.logger.info(pprint.pformat(conf))
             json.dump(conf, f, indent=2)
 
+
     def save_run_data(self, run_df):
         """
         Saves run dataframe

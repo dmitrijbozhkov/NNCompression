@@ -1,6 +1,10 @@
 """Utilities for manipulating runner statistics"""
 
+from os.path import isdir, isfile
 from pathlib import Path
+import json
+import os
+import shutil
 
 
 def extract_model_weights(model, weight_name="weight"):
@@ -57,6 +61,81 @@ def preprocess_run_data(run_df):
     return mean_df, std_df, selected_vals
 
 
-def enumerate_run_fodler(folder_path):
+def enumerate_run_folder(folder_path):
+    """
+    Populate dictionary with model runs
+
+    :param folder_path: Path to experiment run folder
+    :returns: Dictionary of runs and paths
+    """
     if not isinstance(folder_path, Path):
-        fodler_path = Path(folder_path)
+        folder_path = Path(folder_path)
+
+    run_folders = {}
+    for folder in folder_path.iterdir():
+        if os.path.isdir(folder):
+            curr_folder = {}
+            run_data_path = folder / "run_data.parquet"
+            if os.path.isfile(run_data_path):
+                curr_folder["run_data"] = run_data_path
+            config_path = folder / "config.json"
+            if os.path.isfile(config_path):
+                curr_folder["config"] = config_path
+            checkpoint_path = folder / "checkpoints"
+            if os.path.isdir(checkpoint_path):
+                curr_folder["checkpoint_path"] = checkpoint_path
+            run_folders[folder.name] = curr_folder
+
+    return run_folders
+
+
+def filter_run_folder(folder_dict, config_key, config_value):
+    """
+    Filter run dictionary by config key and value
+
+    :param fodler_dict: Dictionary of runs
+    :param config_key: Run configuration key
+    :param config_value: Run configuration value
+    :returns: Dictionary of runs that is filtered
+    """
+
+    filtered_dicts = {}
+    for run in folder_dict:
+        run_data = folder_dict[run]
+        if "config" in run_data:
+            with open(run_data["config"], "r") as f:
+                config = json.load(f).get("config")
+
+                if not config:
+                    continue
+
+                if config_key not in config:
+                    continue
+
+                if config[config_key] == config_value:
+                    filtered_dicts[run] = run_data
+
+    return filtered_dicts
+
+
+def copy_results(folder_dict, target_folder):
+    """
+    Copy only results into the folder without checkpoints
+
+    :param folder_dict: Dictionary with data folders
+    :param target_folder: target folder for data
+    """
+    if not isinstance(target_folder, Path):
+        target_folder = Path(target_folder)
+
+    for run_id in folder_dict:
+        target_path = target_folder / run_id
+        os.mkdir(target_path)
+
+        config = folder_dict[run_id].get("config")
+        if config:
+            shutil.copyfile(config, target_path / "config.json")
+
+        run_data = folder_dict[run_id].get("run_data")
+        if run_data:
+            shutil.copyfile(run_data, target_path / "run_data.parquet")

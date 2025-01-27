@@ -3,7 +3,7 @@ learning_rate: 0.1
 epoch: 200
 dataset: cifar100
 is_dataset_canon_split: True
-model: resnet50
+model: resnet18_cifar
 
 optimizer_type: sgd
 optimizer_momentum: 0.9
