@@ -1,0 +1,10 @@
+defaults:
+  - hpo_config: perturb_grid_search
+  - training_config: resnet50_baseline
+  - quantization_config: quantize_kmeans
+  - perturb_regularization_config: perturb_resnet50
+
+study_name: resnet50_perturb_experiment
+seed: 0
+reruns: 0
+epochs_test: -1

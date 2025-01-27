@@ -1,0 +1,24 @@
+batch_size: 128
+learning_rate: 0.1
+epoch: 200
+dataset: cifar100
+is_dataset_canon_split: True
+model: resnet50
+
+optimizer_type: sgd
+optimizer_momentum: 0.9
+weight_decay: 0.0005
+
+scheduler_type: multistep
+scheduler_milestones: [60, 120, 160, 180]
+
+evaluate_step: 1
+evaluate_metrics: ["accuracy"]
+evaluate_datasets: ["test"]
+
+is_early_stopping: true
+early_stopping_min_delta: 0
+early_stopping_tolerance: 15
+early_stopping_eval_metric: "test_accuracy"
+
+output: "/run/media/dima/Scratch/perturb_experiment/run_out/"

@@ -1,0 +1,10 @@
+defaults:
+  - hpo_config: template
+  - training_config: resnet18_other_baseline
+  - quantization_config: quantize_kmeans
+  - perturb_regularization_config: template
+
+study_name: resnet18_baseline
+seed: 1
+reruns: 0
+epochs_test: -1

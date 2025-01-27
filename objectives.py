@@ -1,13 +1,36 @@
-from hessian import hessian
+from typing import NamedTuple
 import torch
 import torch.nn as nn
 
-class HessianCELoss(nn.Module):
+class LossHistory(NamedTuple):
+    """Loss values to be saved in history"""
+
+    loss: float # total loss
+    objective_loss: float
+    perturb_loss: float
+
+
+class LossEvaluation(NamedTuple):
+    """Evaluated loss values"""
+
+    loss: torch.Tensor # total loss
+    objective_loss: torch.Tensor
+    perturb_loss: torch.Tensor
+
+    def from_tensor(self):
+        return LossHistory(
+            self.loss.item(),
+            self.objective_loss.item(),
+            self.perturb_loss.item()
+        )
+
+
+class Loss(nn.Module):
     """
-    Cross entropy with hessian
+    Cross entropy loss with perturbation
     """
 
-    def __init__(self, net, config):
+    def __init__(self, net, runner_config: dict):
         """
         :param net: Neural network to use
         :param device: Device to put hessian results on
@@ -15,32 +38,32 @@ class HessianCELoss(nn.Module):
         """
         super().__init__()
         self.net = net
-        self.config = config
+        self.config = runner_config
         self.cross_entropy = nn.CrossEntropyLoss()
-        self.l1_loss = nn.L1Loss()
 
     def forward(self, x, y, perturbations=None):
         """
+        Objective for training classification
+
         :param x: logits
         :param y: targets
+        :param perturbations: Perturbed outputs
+        :returns: Tuple of total loss and objective loss
         """
-        cross_entropy = self.cross_entropy(x, y)
-        if self.config["l"] == 1.0:
-            curvature = torch.tensor(0)
-        else:
-            # calculate first order derivative of all weights
-            first_grad = torch.autograd.grad(
-                cross_entropy,
-                self.net.parameters(),
-                create_graph=True,
-                retain_graph=True
-            )
-            hesse = hessian(first_grad, self.net, self.device)
-            curvature = torch.sum(torch.pow(hesse, 2))
+        objective_loss = self.cross_entropy(x, y)
+
         if perturbations is not None:
-            perturb_loss = self.config["perturb_loss"] * self.l1_loss(x.repeat(self.config["perturb_amount"], 1), perturbations)
+            perturb_objectives = []
+            for perturb_batch in perturbations:
+                perturb_objective = torch.abs(self.cross_entropy(perturb_batch, y) - objective_loss)
+                perturb_objectives.append(perturb_objective.unsqueeze(0))
+            perturb_objectives = torch.cat(perturb_objectives)
+            perturb_loss = torch.mean(perturb_objectives)
         else:
-            perturb_loss = 0
-        return (cross_entropy * self.config["l"] + curvature * (1 - self.config["l"]) + perturb_loss,
-                cross_entropy.item(),
-                curvature.item())
+            perturb_loss = torch.tensor(0)
+
+        loss = (
+            self.config["loss_weight"] * objective_loss +
+            self.config["perturb_loss_mult"] * perturb_loss
+        )
+        return LossEvaluation(loss, objective_loss, perturb_loss)

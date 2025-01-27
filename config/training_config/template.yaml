@@ -1,0 +1,37 @@
+batch_size: 1024
+learning_rate: 0.001
+weight_decay: 0.00001
+epoch: 100
+gpu: ""
+dataset: MNIST
+is_dataset_canon_split: False
+dataset_train_split: 0.6
+dataset_valid_split: 0.2
+dataset_test_split: 0.2
+model: LeNet3_3
+
+optimizer_type: sgd
+optimizer_momentum: 0.0
+optimizer_adam_beta_1: 0.9
+optimizer_adam_beta_2: 0.999
+optimizer_eps: 1e-08
+
+scheduler_type: const
+scheduler_step_type: epoch
+scheduler_lambda_multiplier: 1
+scheduler_lambda_last_epoch: -1
+scheduler_step_size: -1
+scheduler_gamma: 0.1
+scheduler_T_max: -1
+scheduler_eta_min: 0.0
+
+evaluate_step: 1
+evaluate_metrics: ["accuracy"]
+evaluate_datasets: ["test"]
+
+is_early_stopping: false
+early_stopping_min_delta: 0
+early_stopping_tolerance: 0
+early_stopping_eval_metric: ""
+
+output: "./outputs"

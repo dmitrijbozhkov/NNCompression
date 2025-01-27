@@ -1,0 +1,9 @@
+#+title: Intr
+
+* NVIDIA Deep Learning Performance
+[[https://docs.nvidia.com/deeplearning/performance/index.html]]
+
+* NN Performance
+[[https://horace.io/brrr_intro.html]]
+
+* Data Movement is all you need

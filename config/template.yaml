@@ -1,0 +1,10 @@
+defaults:
+  - hpo_config: template
+  - training_config: template
+  - quantization_config: template
+  - perturb_regularization_config: template
+
+study_name: template
+seed: 0
+reruns: 0
+epochs_test: -1

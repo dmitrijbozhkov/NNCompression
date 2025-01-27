@@ -1,70 +1,174 @@
 #!/usr/bin/env python3
+from pathlib import Path
 import seaborn as sns
 import matplotlib.pyplot as plt
-import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import re
+import json
+
+def combine_result_dataset(data_folder):
+    data_path = Path(data_folder)
+
+    run_datasets = []
+    for trial_dir in data_path.iterdir():
+        if trial_dir.is_dir():
+            config_path = trial_dir / "config.json"
+            run_data_path = trial_dir / "run_data.parquet"
+            if not (config_path.is_file() and run_data_path.is_file()):
+                continue
+            trial_id = trial_dir.parts[-1]
+
+            with open(config_path, "r") as f:
+                config = json.load(f)
+
+            search_config = {c: config["config"][c] for c in config["config"] if c in config["search_space"]}
+
+            run_data = pd.read_parquet(run_data_path)
+
+            for hp in search_config:
+                run_data[hp] = search_config[hp]
+
+            run_data["trial_idx"] = trial_id
+
+            run_datasets.append(run_data)
+
+    return pd.concat(run_datasets)
 
 
-def plot_loss(train_loss, valid_loss, train_cross_entropy, valid_cross_entropy, result_path):
-    fig1 = plt.figure(figsize=(10, 8))
-    plt.plot(range(1, len(train_loss) + 1), train_loss, label='Training Loss')
-    plt.plot(range(1, len(valid_loss) + 1), valid_loss, label='Validation Loss')
-    # find position of lowest validation loss
-    '''minposs = valid_cross_entropy.index(min(valid_cross_entropy)) + 1
-    plt.axvline(minposs, linestyle='--', color='r', label='Early Stopping Checkpoint')'''
+def plot_run_loss(run_df, epoch_amount):
+    fig1 = plt.figure()
+
+    for run_num in run_df["run_num"].unique():
+        select_df = run_df[run_df["run_num"] == run_num]
+        plt.plot(range(1, epoch_amount + 1), select_df["train_loss"], label=f'Training Loss Run {run_num}')
+        plt.plot(range(1, epoch_amount + 1), select_df["valid_loss"], label=f'Validation Loss  Run {run_num}')
+        plt.xlabel('epochs')
+        plt.ylabel('loss')
+        plt.xlim(0, epoch_amount + 1)  # consistent scale
+        plt.grid(True)
+        plt.legend()
+        plt.tight_layout()
+
+    return fig1
+
+
+def plot_test_acc(run_df, epoch_amount):
+    fig1 = plt.figure()
+    for run_num in run_df["run_num"].unique():
+        select_df = run_df[run_df["run_num"] == run_num]
+        plt.plot(range(1, epoch_amount + 1), select_df["accuracy"], label=f'Test Accuracy Run {run_num}')
+        plt.xlabel('epochs')
+        plt.ylabel('test accuracy')
+        plt.xlim(0, epoch_amount + 1)  # consistent scale
+        plt.grid(True)
+        plt.legend()
+        plt.tight_layout()
+
+    return fig1
+
+
+def plot_quant_train_acc(mean_df, std_df):
+    mean_df = mean_df[mean_df["epoch"] == 1]
+    std_df = std_df.loc[mean_df.index]
+    quant_data = [re.search(r"quant_(\d+)_(\w+)", c) for c in mean_df.columns if "quant" in c]
+    quant_data = [(m.group(1), m.group(2)) for m in quant_data]
+    metrics = set(q[1] for q in quant_data)
+
+    metric_figs = {}
+    for metric in metrics:
+        fig = plt.figure()
+        metric_quantizations = sorted([int(q_d[0]) for q_d in quant_data if q_d[1] == metric], reverse=False)
+        for quant in metric_quantizations:
+            quant_column = f"quant_{quant}_{metric}"
+            # plt.errorbar(mean_df.index, mean_df[quant_column], std_df[quant_column], label=f'{quant}')
+            plt.plot(mean_df.index, mean_df[quant_column], "-o")
+            plt.fill_between(mean_df.index, mean_df[quant_column] - std_df[quant_column], mean_df[quant_column] + std_df[quant_column], alpha=0.15, label=f'{quant}')
+            plt.xlabel('test epoch')
+            plt.ylabel(f'quantization {metric}')
+            plt.xticks(mean_df.index)
+            plt.xlim(0, mean_df.index[-1] + 1)  # consistent scale
+            plt.grid(True)
+            plt.legend()
+            plt.tight_layout()
+
+        metric_figs[metric] = fig
+
+    return metric_figs
+
+
+def plot_quant_acc(mean_df, std_df):
+    quant_data = [re.search(r"quant_(\d+)_(\w+)", c) for c in mean_df.columns if "quant" in c]
+    quant_data = [(m.group(1), m.group(2)) for m in quant_data]
+    metrics = set(q[1] for q in quant_data)
+
+    metric_figs = {}
+    for metric in metrics:
+        fig = plt.figure()
+        metric_quantizations = sorted([int(q_d[0]) for q_d in quant_data if q_d[1] == metric], reverse=False)
+        quant_last_mean = []
+        quant_last_std = []
+        for quant in metric_quantizations:
+            quant_column = f"quant_{quant}_{metric}"
+            quant_last_mean.append(mean_df[quant_column].iloc[-1])
+            quant_last_std.append(std_df[quant_column].iloc[-1])
+
+        quant_last_mean = np.array(quant_last_mean)
+        quant_last_std = np.array(quant_last_std)
+        quant_steps = [i for i in range(1, len(metric_quantizations) + 1)]
+        plt.plot(quant_steps, quant_last_mean, "-o")
+        plt.fill_between(quant_steps, quant_last_mean - quant_last_std, quant_last_mean + quant_last_std, alpha=0.15)
+        plt.xlabel('quantization levels')
+        plt.ylabel(f'quantization {metric}')
+        plt.xticks(quant_steps, metric_quantizations)
+        plt.grid(True)
+        plt.legend()
+        plt.tight_layout()
+
+        metric_figs[metric] = fig
+
+    return metric_figs
+
+def plot_mean_run_loss(mean_df, std_df, epoch_amount):
+    fig1 = plt.figure()
+    plt.errorbar(range(1, epoch_amount + 1), mean_df["train_loss"], std_df["train_loss"], capsize=3, label='Average train loss')
+    plt.errorbar(range(1, epoch_amount + 1), mean_df["valid_loss"], std_df["valid_loss"], capsize=3, label='Average train loss')
     plt.xlabel('epochs')
-    plt.ylabel('loss')
-    # plt.ylim(0, 0.5)  # consistent scale
-    plt.xlim(0, len(train_loss) + 1)  # consistent scale
+    plt.ylabel('mean loss')
+    plt.xlim(0, epoch_amount + 1)  # consistent scale
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
-    fig1.savefig(result_path / 'loss.png', bbox_inches='tight')
-    plt.close(fig1)
 
-    fig2 = plt.figure(figsize=(10, 8))
-    plt.plot(range(1, len(train_cross_entropy) + 1), train_cross_entropy, label='Training Cross Entropy')
-    plt.plot(range(1, len(valid_cross_entropy) + 1), valid_cross_entropy, label='Validation Cross Entropy')
-    # find position of lowest validation loss
-    '''minposs = valid_cross_entropy.index(min(valid_cross_entropy)) + 1
-    plt.axvline(minposs, linestyle='--', color='r', label='Early Stopping Checkpoint')'''
+    return fig1
+
+
+def plot_mean_run_acc(mean_df, std_df, epoch_amount):
+    fig1 = plt.figure()
+    plt.errorbar(range(1, epoch_amount + 1), mean_df["accuracy"], std_df["accuracy"], capsize=3, label='Average test accuracy')
     plt.xlabel('epochs')
-    plt.ylabel('Cross Entropy')
-    # plt.ylim(0, 0.5)  # consistent scale
-    plt.xlim(0, len(train_cross_entropy) + 1)  # consistent scale
+    plt.ylabel('mean acc')
+    plt.xlim(0, epoch_amount + 1)  # consistent scale
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
-    fig2.savefig(result_path / 'CrossEntropy.png', bbox_inches='tight')
-    plt.close(fig2)
+
+    return fig1
 
 
-def plot_weights(model, plot_path=None):
-    modules = [module for module in model.modules()]
-    num_sub_plot = 0
-    for i, layer in enumerate(modules):
-        if hasattr(layer, 'weight'):
-            plt.subplot(131 + num_sub_plot)
-            w = layer.weight.data
-            w_one_dim = w.cpu().numpy().flatten()
-            plt.hist(w_one_dim[w_one_dim != 0], bins=50)
-            num_sub_plot += 1
-    if plot_path:
-        plt.savefig(plot_path)
-    plt.show()
+def plot_weights(weights, quant_clusters=None, bins=50):
+    fig1 = plt.figure()
+    plt.hist(weights, bins=bins)
+    if quant_clusters is not None:
+        plt.ylim(ymin=0)
+        plt.scatter(quant_clusters, [0 for _ in range(len(quant_clusters))], color="red", clip_on=False, label="KMeans centers")
+        plt.legend()
+    plt.xlabel('weight')
+    plt.ylabel('weight count')
+    plt.tight_layout()
 
-
-def plot_all_weights(model, result_path):
-    modules = [module for module in model.modules()]
-    modules = modules[1:]
-    all_weights = torch.tensor([])
-    for i, layer in enumerate(modules):
-        if hasattr(layer, 'weight'):
-            w = layer.weight.data.view(-1).cpu()
-            all_weights = torch.cat((all_weights, w))
-    sns.histplot(all_weights.cpu().numpy(),bins=50)
-    plt.savefig(result_path / "all_weights.png", bbox_inches='tight')
-    plt.close()
+    return fig1
 
 
 def plot_hesse(hesse, epoch, result_path):
@@ -85,21 +189,39 @@ def plot_hesse(hesse, epoch, result_path):
     heatmap_fig.savefig(result_path + '/hesse_{}.png'.format(epoch))
     plt.close()
 
+def plot_quant_mean_perturb_acc(mean_orig, mean_perturb):
+    quant_data = [re.search(r"quant_(\d+)_(\w+)", c) for c in mean_orig.columns if "quant" in c]
+    quant_data = [(m.group(1), m.group(2)) for m in quant_data]
+    metrics = set(q[1] for q in quant_data)
 
-if __name__ == "__main__":
-    lloyd_df_path = "./result/LeNet3_3_MNIST/time5/lambda_1.0/quantiz/lloydquantizer_30.csv"
-    uniform_df_path = "./result/LeNet3_3_MNIST/time5/lambda_1.0/quantiz/uniformdquantizer_30.csv"
-    lloyd_df = pd.read_csv(lloyd_df_path, index_col=0).reset_index()
-    uniform_df = pd.read_csv(uniform_df_path, index_col=0).reset_index()
-    print(uniform_df)
-    fig = plt.figure(figsize=(10, 8))
-    plt.title("Quantization pefrormance for LeNet3_3 on MNIST")
-    plt.plot(lloyd_df["acc_after"], label="Lloyd quantizer")
-    plt.plot(uniform_df["acc_after"], label="Uniform quantizer")
-    plt.xticks(list(range(len(lloyd_df))), lloyd_df["index"])
-    plt.xlabel('compression rate')
-    plt.ylabel('accuracy on test set')
-    plt.grid(True)
-    # plt.tight_layout()
-    plt.legend()
-    fig.savefig("./compression.png", bbox_inches='tight')
+    metric_figs = {}
+    for metric in metrics:
+        fig = plt.figure()
+        metric_quantizations = sorted([int(q_d[0]) for q_d in quant_data if q_d[1] == metric], reverse=False)
+        quant_last_orig = []
+        quant_last_perturb = []
+        for quant in metric_quantizations:
+            quant_column = f"quant_{quant}_{metric}"
+            quant_last_orig.append(mean_orig[quant_column].iloc[-1])
+            quant_last_perturb.append(mean_perturb[quant_column].iloc[-1])
+
+        quant_last_orig = np.array(quant_last_orig)
+        quant_last_perturb = np.array(quant_last_perturb)
+        metric_quantizations = np.array(metric_quantizations)
+        quant_steps = [i for i in range(1, len(metric_quantizations) + 1)]
+        plt.plot(quant_steps, quant_last_orig, "-o", label="No Perturb")
+        plt.plot(quant_steps, quant_last_perturb, "-o", label="Perturb")
+        for j in range(len(quant_last_orig)):
+            plt.text(quant_steps[j] - 0.6, quant_last_orig[j] + 3, np.round(quant_last_orig[j], 2))
+            plt.text(quant_steps[j] + 0.1, quant_last_perturb[j] - 3, np.round(quant_last_perturb[j] - quant_last_orig[j], 2))
+        # plt.fill_between(metric_quantizations, quant_last_orig - quant_last_perturb, quant_last_ + quant_last_std, alpha=0.15)
+        plt.xlabel('quantization levels')
+        plt.ylabel(f'quantization {metric}')
+        plt.xticks(quant_steps, metric_quantizations)
+        plt.grid(True)
+        plt.legend()
+        plt.tight_layout()
+
+        metric_figs[metric] = fig
+
+    return metric_figs

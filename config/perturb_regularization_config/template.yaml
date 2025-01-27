@@ -1,0 +1,6 @@
+is_perturb_reg: false
+perturb_loss_mult: 0.0
+perturb_mean: 0.0
+perturb_variance: 0.3
+perturb_amount: 5
+perturb_start: 0

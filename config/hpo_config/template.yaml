@@ -1,0 +1,9 @@
+defaults:
+  - search_space: template
+
+database: ""
+opt_direction: minimize
+hp_sampler: tpe
+n_trials: 0
+optimization_objective: test_accuracy
+is_hpo: false
