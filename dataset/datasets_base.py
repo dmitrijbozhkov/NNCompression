@@ -109,12 +109,10 @@ class Dataset:
             train_dataset = d.CIFAR100(
                 root=str(data_folder),
                 train=True,
-                download=True,
                 transform=transform)
             test_dataset = d.CIFAR100(
                 root=str(data_folder),
                 train=False,
-                download=True,
                 transform=transform
             )
             task_type = "classification"
