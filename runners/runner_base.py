@@ -1,5 +1,6 @@
 from abc import ABC
 from logging import Logger
+from os.path import isfile
 from pathlib import Path
 from typing import List
 from datetime import datetime
@@ -14,6 +15,7 @@ import pandas as pd
 import pprint
 import json
 import torch
+import os
 
 class RunnerBase(ABC):
     """Runner base class"""
@@ -174,6 +176,18 @@ class Runner:
         torch.save(self.net.state_dict(), checkpoint_path)
 
 
+    def delete_checkpoint(self, checkpoint_name):
+        """
+        Delete checkpoint from disk
+        """
+        checkpoint_path = self.checkpoint_path / f"{checkpoint_name}.pth"
+        if os.path.isfile(checkpoint_path):
+            os.remove(checkpoint_path)
+            self.logger.info(f"Deleted checkpoint: {checkpoint_path}")
+        else:
+            self.logger.info(f"Skip deleteting checkpoint: {checkpoint_path}")
+
+
     def load_checkpoint(self, checkpoint_name):
         """
         Load model checkpoint
@@ -292,6 +306,11 @@ class Runner:
 
         for plugin in self.plugin_runners:
             plugin.epoch_start(self, epoch)
+
+
+        curr_checkpoint = str(self.total_epochs_trained).zfill(2)
+        self.delete_checkpoint(curr_checkpoint)
+
 
     def epoch_end(self, epoch):
         """
