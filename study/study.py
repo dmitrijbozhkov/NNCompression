@@ -114,20 +114,19 @@ class Study:
 
         trial_id = str(trial.number) if trial else None
 
-
         run_data = []
         for run_num in range(total_runs):
-            torch.cuda.empty_cache()
             runner_config = self.study_config.make_runner_config_dict(run_num, trial, trial_id)
             runner = create_runner(runner_config)
             runner.train()
             runner.save_runs_config()
             run_df = runner.run_stats_to_df()
             run_data.append(run_df)
-
-        run_data = pd.concat(run_data)
-
-        runner.save_run_data(run_data)
+            if run_num == total_runs - 1:
+                run_data = pd.concat(run_data)
+                runner.save_run_data(run_data)
+                del runner
+                torch.cuda.empty_cache()
 
         print(run_data)
 
