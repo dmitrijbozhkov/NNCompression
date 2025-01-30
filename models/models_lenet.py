@@ -70,7 +70,7 @@ class LeNet3_4(nn.Module):
 class LeNet4(nn.Module):
     # 4834 weights
     def __init__(self, num_classes=10):
-        super(LeNet_4, self).__init__()
+        super(LeNet4, self).__init__()
         self.conv1 = nn.Conv2d(3, 6, 5, padding=0)  # 24 24 -->12 12
         self.conv2 = nn.Conv2d(6, 12, 5, padding=0)  # 8 8 -->4 4
         self.conv3 = nn.Conv2d(12, 24, 3, padding=0)
@@ -87,7 +87,7 @@ class LeNet4(nn.Module):
 
 class LeNet5(nn.Module):
     def __init__(self, num_classes=10):
-        super(LeNet_5, self).__init__()
+        super(LeNet5, self).__init__()
         self.conv1 = nn.Conv2d(3, 16, 3, padding=1)
         self.conv2 = nn.Conv2d(16, 48, 3, padding=1)
         self.conv3 = nn.Conv2d(48, 96, 3, padding=1)
