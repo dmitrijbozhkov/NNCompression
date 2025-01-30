@@ -1,6 +1,5 @@
 from torch import nn
 from torch.nn.utils.parametrize import register_parametrization
-from operator import attrgetter
 from models.quantization.utils import check_legal
 from torch.nn.modules.batchnorm import _NormBase
 import torch

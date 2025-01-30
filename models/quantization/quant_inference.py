@@ -1,6 +1,7 @@
-from kmeans_pytorch import kmeans, kmeans_predict
+from kmeans_pytorch import kmeans
 from sklearn.cluster import KMeans, MiniBatchKMeans
 from models.quantization.utils import check_legal
+from torch.ao.quantization import HistogramObserver
 import torch
 
 
@@ -67,11 +68,28 @@ def kmeans_cuda_quant_levels(weights, level_amount, device, **kmeans_params):
     return clusters
 
 
-def uniform_quantizer(net, level):
+def uniform_affine_quantizer(weights, level_amount):
     """
-    Quantize weights uniformly
+    Quantize weights in a uniform affine manner
+
+    :param weights: Tensor of weights to quantize
+    :param level_amount: Amount of levels for quantization
     """
-    pass
+    observer = HistogramObserver(bins=level_amount)
+
+    weights = weights.to("cpu")
+
+    observer(weights)
+
+    scale, zero_point = observer.calculate_qparams()
+
+    scale = scale.type_as(weights)
+    zero_point = zero_point.type_as(zero_point)
+
+    levels = torch.arange(-(level_amount // 2), level_amount // 2)
+
+    return (levels - zero_point) * scale
+
 
 def infer_model_quantization(model, quant_levels, quant_type, quant_device, kmeans_params):
     """
@@ -97,3 +115,5 @@ def infer_model_quantization(model, quant_levels, quant_type, quant_device, kmea
         return batched_kmeans_quant_levels(weights, quant_levels, **kmeans_params)
     if quant_type == "kmeans_cuda":
         return kmeans_cuda_quant_levels(weights, quant_levels, quant_device, **kmeans_params)
+    if quant_type == "uniform_affine":
+        return uniform_affine_quantizer(weights, quant_levels)

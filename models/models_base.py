@@ -1,5 +1,5 @@
 from dataset.datasets_base import Dataset
-# from torchvision.models import resnet18, resnet34, resnet50, resnet101, resnet152
+from torchvision.models import resnet18, resnet34, resnet50, resnet101, resnet152
 from models.resnet import resnet18_cifar, resnet50_cifar, resnet101_cifar, resnet152_cifar, resnet34_cifar
 from models.models_lenet import (
     LeNet3_2,
@@ -41,6 +41,27 @@ def get_model(dataset: Dataset, runner_config: dict):
         )
     if runner_config["model"] == "alexnet":
         net = AlexNet(
+            num_classes=dataset.output_num
+        )
+
+    if runner_config["model"] == "resnet18_imagenet":
+        net = resnet18(
+            num_classes=dataset.output_num
+        )
+    if runner_config["model"] == "resnet34_imagenet":
+        net = resnet34(
+            num_classes=dataset.output_num
+        )
+    if runner_config["model"] == "resnet50_imagenet":
+        net = resnet50(
+            num_classes=dataset.output_num
+        )
+    if runner_config["model"] == "resnet101":
+        net = resnet101(
+            num_classes=dataset.output_num
+        )
+    if runner_config["model"] == "resnet152_cifar":
+        net = resnet152(
             num_classes=dataset.output_num
         )
 

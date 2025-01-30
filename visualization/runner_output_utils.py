@@ -5,6 +5,7 @@ from pathlib import Path
 import json
 import os
 import shutil
+import pandas as pd
 
 
 def extract_model_weights(model, weight_name="weight"):
@@ -89,6 +90,22 @@ def enumerate_run_folder(folder_path):
     return run_folders
 
 
+def filter_incomplete_runs(run_dict):
+    """
+    Filter out incomplete runs that don't have run_data or config
+
+    :param run_dict: Dictionary with run data
+    :returns: Run dictionary without empty runs
+    """
+    run_complete = {}
+
+    for run in run_dict:
+        if run_dict[run].get("run_data") and run_dict[run].get("config"):
+            run_complete[run] = run_dict[run]
+
+    return run_complete
+
+
 def filter_run_folder(folder_dict, config_key, config_value):
     """
     Filter run dictionary by config key and value
@@ -116,6 +133,22 @@ def filter_run_folder(folder_dict, config_key, config_value):
                     filtered_dicts[run] = run_data
 
     return filtered_dicts
+
+
+def get_config_run_data(run_dict):
+    """
+    Reads and returns config and run_data
+
+    :param run_dict: Dictionary of run parameters
+    """
+
+    run_data = pd.read_parquet(run_dict["run_data"])
+
+    with open(run_dict["config"], "r") as f:
+        config = json.load(f)["config"]
+
+    return config, run_data
+
 
 
 def copy_results(folder_dict, target_folder):

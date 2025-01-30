@@ -1,0 +1,11 @@
+defaults:
+  - hpo_config: perturb_grid_01_search
+  - training_config: resnet18_baseline
+  - quantization_config: quantize_kmeans
+  - perturb_regularization_config: perturb_loss_01_resnet18
+
+study_name: resnet18_perturb_loss_01_experiment
+seed: 1
+reruns: 0
+epochs_test: -1
+is_record_loss: true
