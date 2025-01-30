@@ -1,0 +1,22 @@
+batch_size: 512
+learning_rate: 0.001
+epoch: 100
+dataset: cifar100
+is_dataset_canon_split: True
+model: LeNet5
+
+optimizer_type: adam
+weight_decay: 0.0
+
+scheduler_type: const
+
+evaluate_step: 1
+evaluate_metrics: ["accuracy"]
+evaluate_datasets: ["test"]
+
+is_early_stopping: true
+early_stopping_min_delta: 0
+early_stopping_tolerance: 10
+early_stopping_eval_metric: "test_accuracy"
+
+output: "/run/media/dima/Scratch/perturb_experiment/run_out/"

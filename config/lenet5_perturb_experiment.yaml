@@ -1,0 +1,11 @@
+defaults:
+  - hpo_config: perturb_grid_search
+  - training_config: lenet5_baseline
+  - quantization_config: quantize_kmeans
+  - perturb_regularization_config: perturb_resnet18
+
+study_name: lenet5_perturb_experiment
+seed: 1
+reruns: 0
+epochs_test: -1
+is_record_loss: true
