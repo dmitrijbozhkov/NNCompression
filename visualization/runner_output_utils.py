@@ -119,18 +119,11 @@ def filter_run_folder(folder_dict, config_key, config_value):
     filtered_dicts = {}
     for run in folder_dict:
         run_data = folder_dict[run]
-        if "config" in run_data:
-            with open(run_data["config"], "r") as f:
-                config = json.load(f).get("config")
+        if config_key not in run_data["config"]:
+            continue
 
-                if not config:
-                    continue
-
-                if config_key not in config:
-                    continue
-
-                if config[config_key] == config_value:
-                    filtered_dicts[run] = run_data
+        if run_data["config"][config_key] == config_value:
+            filtered_dicts[run] = run_data
 
     return filtered_dicts
 
@@ -150,6 +143,17 @@ def get_config_run_data(run_dict):
     return config, run_data
 
 
+def load_runs(run_dict):
+    """
+    Loads run config and run data
+    """
+    for run in run_dict:
+        config, run_data = get_config_run_data(run_dict[run])
+        run_dict[run]["config"] = config
+        run_dict[run]["run_data"] = run_data
+
+    return run_dict
+
 
 def copy_results(folder_dict, target_folder):
     """
@@ -163,12 +167,12 @@ def copy_results(folder_dict, target_folder):
 
     for run_id in folder_dict:
         target_path = target_folder / run_id
-        os.mkdir(target_path)
+        os.makedirs(target_path)
 
         config = folder_dict[run_id].get("config")
-        if config:
+        if config is not None:
             shutil.copyfile(config, target_path / "config.json")
 
         run_data = folder_dict[run_id].get("run_data")
-        if run_data:
+        if run_data is not None:
             shutil.copyfile(run_data, target_path / "run_data.parquet")
