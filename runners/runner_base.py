@@ -1,16 +1,14 @@
 from abc import ABC
 from logging import Logger
-from os.path import isfile
 from pathlib import Path
 from typing import List
 from datetime import datetime
 from torch import nn
+from torchvision.transforms import v2
 from torch.optim.optimizer import Optimizer
-from models.quantization.quant_inference import infer_model_quantization
-from models.quantization.quant_perform import quantize_model_weights
+from models.orchestrator import ModelOrchestratorBase
 from study.utils import TrialConfig
 from dataset.datasets_base import Dataset
-from torchvision import transforms
 import pandas as pd
 import pprint
 import json
@@ -56,7 +54,7 @@ class Runner:
     config: TrialConfig
 
     # Common network runner properties
-    net: nn.Module
+    net: ModelOrchestratorBase
     optimizer: Optimizer
     dataset: Dataset
     objective: nn.Module
@@ -71,10 +69,15 @@ class Runner:
     total_epochs_trained: int
     curr_run_metadata: RunnerEvent
 
+    # Data transforms
+    transform_train: v2.Transform
+    transform_test: v2.Transform
+
     # Plugin runners
     plugin_runners: List[RunnerBase]
     is_train_continue: bool = True
     is_epoch_batch: bool = True
+    is_checkpoint: bool = False
 
     # Logger
     logger: Logger
@@ -91,6 +94,8 @@ class Runner:
                  result_path,
                  run_num,
                  device,
+                 transform_train,
+                 transform_test,
                  logger,
                  **kwargs) -> None:
         # Configuration object
@@ -113,22 +118,8 @@ class Runner:
         self.running_stats = []
         self.total_epochs_trained = 0
 
-        # mean=[0.485, 0.456, 0.406]
-        # std=[0.229, 0.224, 0.225]
-        # mean = [0.5070751592371323, 0.48654887331495095, 0.4409178433670343]
-        # std = [0.2673342858792401, 0.2564384629170883, 0.27615047132568404]
-        mean = [x / 255.0 for x in[0.507, 0.487, 0.441]]
-        std = [x / 255.0 for x in [0.267, 0.256, 0.276]]
-
-        self.transform_train = transforms.Compose([
-            transforms.RandomCrop(32, 4),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(15),
-            transforms.Normalize(mean=mean, std=std)
-        ])
-        self.transform_test = transforms.Compose([
-            transforms.Normalize(mean=mean, std=std)
-        ])
+        self.transform_train = transform_train
+        self.transform_test = transform_test
 
         # Plugin runners
         self.plugin_runners = plugin_runners
@@ -144,6 +135,14 @@ class Runner:
         """
         run_folder = str(trial_id)
         return config["output"] / config["study_name"] / run_folder
+
+    def set_checkpoint(self, checkpoint):
+        """
+        Set current checkpoint for model
+
+        :param checkpoint: Checkpoint name to load
+        """
+        self.net.load_curr_checkpoint(checkpoint)
 
 
     def save_runs_config(self):
@@ -166,35 +165,6 @@ class Runner:
         result_path = self.result_path / "run_data.parquet"
         self.logger.info(f"Saving run path: {result_path}")
         run_df.to_parquet(result_path)
-
-    def save_checkpoint(self, checkpoint_name):
-        """
-        Save model checkpoint on disk
-        """
-        checkpoint_path = self.checkpoint_path / f"{checkpoint_name}.pth"
-        self.logger.info(f"Saved checkpoint: {checkpoint_path}")
-        torch.save(self.net.state_dict(), checkpoint_path)
-
-
-    def delete_checkpoint(self, checkpoint_name):
-        """
-        Delete checkpoint from disk
-        """
-        checkpoint_path = self.checkpoint_path / f"{checkpoint_name}.pth"
-        if os.path.isfile(checkpoint_path):
-            os.remove(checkpoint_path)
-            self.logger.info(f"Deleted checkpoint: {checkpoint_path}")
-        else:
-            self.logger.info(f"Skip deleteting checkpoint: {checkpoint_path}")
-
-
-    def load_checkpoint(self, checkpoint_name):
-        """
-        Load model checkpoint
-        """
-        checkpoint_path = self.checkpoint_path / f"{checkpoint_name}.pth"
-        self.logger.info(f"Loaded checkpoint: {checkpoint_path}")
-        self.net.load_state_dict(torch.load(checkpoint_path, weights_only=True))
 
 
     def train(self) -> None:
@@ -219,6 +189,7 @@ class Runner:
                 for batch_idx, (data, target) in enumerate(self.dataset.data_loaders.train_loader):
                     self.epoch_batch(epoch, batch_idx, data, target)
             self.total_epochs_trained += 1
+            self.net.set_epochs_trained(self.total_epochs_trained)
             self.epoch_end(epoch)
 
         self.net.eval()
@@ -254,7 +225,7 @@ class Runner:
             data = data.to(self.device)
             data = self.transform_test(data)
             target = target.to(self.device)
-            output = self.net(data).to(self.device)
+            output = self.net(data).forward_out.to(self.device)
             pred = output.data.max(1, keepdim=True)[1]
             correct += pred.eq(target.data.view_as(pred)).sum().item()
 
@@ -271,28 +242,15 @@ class Runner:
         :param level_amount: Amount of quantization levels to use
         :returns: Quantization centers
         """
-        quant_centers = infer_model_quantization(
-            self.net,
-            level_amount,
-            self.config["quantization_type"],
-            self.config["quantization_device"],
-            self.config["quantization_kmeans_params"]
-        )
-        quant_centers = quant_centers.to(self.device)
+        return self.net.quantize(level_amount)
 
-        quantize_model_weights(
-            self.net,
-            quant_centers,
-            self.config["quantization_strategy"]
-        )
-
-        return quant_centers.cpu().numpy()
 
     def run_stats_to_df(self):
         """
         Transform running stats into dataframe
         """
         return pd.DataFrame(self.running_stats)
+
 
     def epoch_start(self, epoch):
         """
@@ -307,9 +265,8 @@ class Runner:
         for plugin in self.plugin_runners:
             plugin.epoch_start(self, epoch)
 
-
-        curr_checkpoint = str(self.total_epochs_trained).zfill(2)
-        self.delete_checkpoint(curr_checkpoint)
+        if self.total_epochs_trained > 0:
+            self.net.delete_run_checkpoint(self.total_epochs_trained - 1)
 
 
     def epoch_end(self, epoch):
@@ -320,15 +277,28 @@ class Runner:
             plugin.epoch_end(self, epoch)
 
         self.running_stats.append(self.curr_run_metadata)
+        self.curr_run_metadata = None
+
 
     def before_train_episode(self):
+        self.curr_run_metadata = RunnerEvent(
+            self.total_epochs_trained,
+            self.run_num,
+            datetime.now()
+        )
+
         for plugin in self.plugin_runners:
             plugin.before_train_episode(self)
+
 
     def epoch_batch(self, epoch, batch_idx, data, target):
         for plugin in self.plugin_runners:
             plugin.epoch_batch(self, epoch, batch_idx, data, target)
 
+
     def after_train_episode(self):
         for plugin in self.plugin_runners:
             plugin.after_train_episode(self)
+
+        if self.curr_run_metadata is not None:
+            self.running_stats.append(self.curr_run_metadata)

@@ -1,3 +1,7 @@
 is_quantize: true
-quantization_type: batched_kmeans
+quantization_type: codebook
+quantization_method: batched_kmeans
+quantization_kmeans_init: k-means++
+quantization_granularity: network
+quantization_round_strategy: nearest
 quantize_levels: [2, 4, 8, 16, 32, 64, 128, 256]

@@ -1,6 +1,5 @@
 from logging import Logger
 from torch import nn
-from models.quantization.perturb_parametrize import Perturbation
 from models.spsa import SPSA
 from runners.runner_base import Runner, RunnerBase
 
@@ -15,26 +14,6 @@ class RunnerTrain(RunnerBase):
         self.epoch_train_loss = []
         self.is_record_loss = runner_config["is_record_loss"]
 
-        self.is_perturb_reg = runner_config["is_perturb_reg"]
-        if self.is_perturb_reg:
-            self.init_perturb_reg(net, runner_config)
-
-
-    def init_perturb_reg(self, net: nn.Module, runner_config: dict):
-        """
-        Initialize model to support perturbation regularization
-
-        :param net: Nerual network Module
-        :param runner_config: Configuration dictionary
-        """
-        self.perturb_parametrization = Perturbation.prepare_model_weights(
-            net,
-            runner_config["perturb_mean"],
-            runner_config["perturb_variance"]
-        )
-        self.perturb_amount = runner_config["perturb_amount"]
-        self.perturb_start = runner_config["perturb_start"]
-
 
     def epoch_start(self, runner, epoch):
         """
@@ -42,27 +21,6 @@ class RunnerTrain(RunnerBase):
         """
         runner.net.train()
         self.epoch_train_loss = []
-
-
-    def perform_perturbation(self, runner: Runner, data):
-        """
-        Perform multiple forward passes with perturbation and collect them
-
-        :param data: Data batch
-        :returns: List with perturbed network outputs or None
-        """
-        if runner.total_epochs_trained < self.perturb_start:
-            return None
-        self.perturb_parametrization.set_is_perturb(True)
-
-        outputs = []
-        for _ in range(self.perturb_amount):
-            output = runner.net.forward(data)
-            outputs.append(output)
-
-        self.perturb_parametrization.set_is_perturb(False)
-        return outputs
-
 
     def epoch_batch(self, runner: Runner, epoch, batch_idx, data, target):
         """
@@ -73,8 +31,7 @@ class RunnerTrain(RunnerBase):
         runner.optimizer.zero_grad()
         data = runner.transform_train(data)
         output = runner.net.forward(data)
-        perturbations = self.perform_perturbation(runner, data) if self.is_perturb_reg else None
-        objective = runner.objective(output, target, perturbations)
+        objective = runner.objective(output, target)
         objective.loss.backward()
         runner.optimizer.step()
         if self.is_record_loss:

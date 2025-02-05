@@ -1,0 +1,8 @@
+epoch: 0
+model: resnet18_cifar
+dataset: cifar100
+evaluate_step: 1
+evaluate_metrics: ["accuracy"]
+evaluate_datasets: ["test"]
+
+output: "/run/media/dima/Scratch/perturb_experiment/run_out/"

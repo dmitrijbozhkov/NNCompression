@@ -1,5 +1,4 @@
 import torch
-from models.quantization.utils import check_legal
 
 
 def _quantize(tensor, quant_levels, quant_idx):
@@ -87,7 +86,7 @@ def _quantize_stochastic(tensor, quant_matrix, quant_levels):
     return _quantize(tensor, quant_levels, quant_idx)
 
 
-def quantize_tensor(
+def quantize_tensor_codebook(
         tensor,
         quant_levels,
         quant_strategy="nearest",
@@ -113,16 +112,3 @@ def quantize_tensor(
         return _quantize_down(tensor, quant_matrix, quant_levels)
     if quant_strategy == "stochastic":
         return _quantize_stochastic(tensor, quant_matrix, quant_levels)
-
-
-def quantize_model_weights(model, quant_levels, quant_strategy):
-    """
-    Quantizes model weight parameters using quantization levels and strategy
-
-    :param model: Pytorch model to quantize
-    :param quant_levels: Vector of quantization levels
-    :param quant_strategy: How to pick quantization level
-    """
-    for name, module in  model.named_modules():
-        if name and check_legal(module):
-            quantize_tensor(module.weight, quant_levels, quant_strategy)

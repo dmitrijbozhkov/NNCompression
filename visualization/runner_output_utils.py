@@ -1,5 +1,4 @@
 """Utilities for manipulating runner statistics"""
-
 from os.path import isdir, isfile
 from pathlib import Path
 import json
@@ -36,9 +35,9 @@ def get_mean_std_stat(run_df):
     """
     Average each rerun and return the value
     """
-    functional_columns = ["epoch_num", "run_num", "time", "train_loss"]
+    functional_columns = ["epoch_num", "run_num", "time", "train_loss", ""]
     data_columns = [c for c in run_df.columns if c not in functional_columns]
-    data_columns = [c for c in data_columns if "centers" not in c]
+    data_columns = [c for c in data_columns if "params" not in c]
 
     mean_df = run_df.groupby("epoch_num")[data_columns].mean().dropna().reset_index()
     std_df = run_df.groupby("epoch_num")[data_columns].std().dropna().reset_index()

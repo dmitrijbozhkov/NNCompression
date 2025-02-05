@@ -68,6 +68,7 @@ class TrialConfig(dict):
     def to_serializable(self):
         conf_path = {k: self[k] for k in self}
         conf_path["output"] = conf_path["output"].as_posix()
+        conf_path["load_checkpoint"] = conf_path["load_checkpoint"].as_posix()
         return conf_path
 
     def to_valid_hp(self):
@@ -77,6 +78,11 @@ class TrialConfig(dict):
         return conf
 
     def to_full_config(self):
+        """
+        Convert config and runner state to seriallizable dict
+
+        :param runner_state: Dictionary with runner state
+        """
         conf = self.to_serializable()
         search_space = deepcopy(self.search_space)
         return {

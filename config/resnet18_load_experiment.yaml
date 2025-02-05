@@ -1,0 +1,11 @@
+defaults:
+  - hpo_config: template
+  - training_config: load_config
+  - quantization_config: quantize_kmeans
+  - perturb_regularization_config: perturb_resnet18
+
+study_name: resnet18_baseline
+seed: 1
+reruns: 0
+epochs_test: -1
+load_checkpoint: /run/media/dima/Scratch/run_out/run_out/outputs/resnet18_perturb_experiment/35/checkpoints/0/34.pth

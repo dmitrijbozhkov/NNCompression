@@ -42,6 +42,6 @@ def create_runner(runner_config_dict: RunnerConfigDict, checkpoint=None) -> Runn
     )
 
     if checkpoint:
-        runner.load_checkpoint(checkpoint)
+        runner.set_checkpoint(checkpoint)
 
     return runner

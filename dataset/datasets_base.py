@@ -1,9 +1,12 @@
 from collections import namedtuple
 from dataclasses import dataclass
+from torchvision.transforms import v2
+from torchvision.transforms import transforms
 from torch.utils.data import ConcatDataset, Subset, DataLoader
-from torchvision import transforms, datasets as d
+from torchvision import datasets as d
 from typing import Tuple
 from pathlib import Path
+import torch
 import numpy as np
 
 data_loaders = namedtuple("dataset", ["train_loader", "test_loader", "valid_loader"])
@@ -40,7 +43,11 @@ class Dataset:
         :param runner_config: Runner configuration object
         :returns: Initialized Dataset object
         """
-        transform = transforms.ToTensor()
+        transform = v2.Compose([
+            v2.ToImage(),
+            v2.ToDtype(torch.float32, scale=True),
+        ])
+        # transform = transforms.ToTensor()
         train_dataset = None
         valid_dataset = None
         test_dataset = None
@@ -108,13 +115,12 @@ class Dataset:
         if runner_config["dataset"] == "cifar100":
             train_dataset = d.CIFAR100(
                 root=str(data_folder),
-                train=True,
-                transform=transform)
+                transform=transform,
+                train=True)
             test_dataset = d.CIFAR100(
                 root=str(data_folder),
-                train=False,
-                transform=transform
-            )
+                transform=transform,
+                train=False)
             task_type = "classification"
             train_size = len(train_dataset)
             test_size = len(test_dataset)

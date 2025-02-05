@@ -13,6 +13,7 @@ class Perturbation(nn.Module):
         self.perturb_mean = perturb_mean
         self.perturb_variance = perturb_variance
         self.batchnorm_layers = []
+        self.perturb_mask = None
         self.is_perturb = False
 
 
@@ -28,6 +29,8 @@ class Perturbation(nn.Module):
                 self.perturb_mean,
                 torch.full_like(weights, self.perturb_variance)
             )
+            if self.perturb_mask is not None:
+                perturbation[~self.perturb_mask] = 0
             return weights + perturbation
         return weights
 
@@ -42,6 +45,15 @@ class Perturbation(nn.Module):
 
         for b_layer in self.batchnorm_layers:
             b_layer.track_running_stats = not self.is_perturb
+
+
+    def set_perturb_mask(self, perturb_mask: torch.Tensor):
+        """
+        Sets a mask of values that must be perturbed
+
+        :param perturb_mask: Binary mask of weights that should be perturbed
+        """
+        self.perturb_mask = perturb_mask
 
 
     def set_batchnorm_layers(self, batchnorm_layers):

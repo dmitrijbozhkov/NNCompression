@@ -44,12 +44,6 @@ class RunnerEval(RunnerBase):
             return False
 
 
-    def save_model(self, runner: Runner):
-        curr_checkpoint = str(runner.total_epochs_trained).zfill(2)
-        runner.save_checkpoint(curr_checkpoint)
-        return curr_checkpoint
-
-
     def epoch_end(self, runner: Runner, epoch):
         """
         Evaluate model on given metric and dataset
@@ -59,15 +53,14 @@ class RunnerEval(RunnerBase):
         if self.is_eval_skip():
             return True
 
-        self.curr_checkpoint = self.save_model(runner)
+        print("Epoch end save")
+        self.curr_checkpoint = runner.net.save_run_checkpoint(runner.total_epochs_trained)
         self.eval_model(runner, "{dataset}_{metric}")
 
 
     def after_train_episode(self, runner: Runner):
         """Ensure that last epoch is evaluated"""
-        if self.epoch_acc != 0:
-            self.epoch_acc = self.evaluate_step
-
+        print("After train episode")
         self.epoch_end(runner, -1)
 
 
@@ -81,15 +74,17 @@ class RunnerQuantEval(RunnerEval):
 
 
     def after_train_episode(self, runner: Runner):
+        super().after_train_episode(runner)
+
         for level in self.quantize_levels:
             quant_name = f"quant_{level}_"
             quant_metric_template = quant_name + "{dataset}_{metric}"
 
-            quant_centers = runner.quantize(level)
+            quant_params = runner.quantize(level)
             super().eval_model(runner, quant_metric_template)
 
-            runner.curr_run_metadata[quant_name + "centers"] = quant_centers
-            runner.load_checkpoint(self.curr_checkpoint)
+            runner.curr_run_metadata[quant_name + "params"] = quant_params
+            runner.net.load_checkpoint(self.curr_checkpoint)
 
 
 class RunnerEarlyStopping(RunnerBase):

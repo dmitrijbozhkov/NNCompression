@@ -1,19 +1,21 @@
 from logging import Logger
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import List, TypedDict
+from typing import Dict, List, TypedDict
 from torch.optim.optimizer import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
+from torchvision.transforms import v2
 from torch import nn
 from dataset.datasets_base import Dataset
 from models.models_base import get_model
 from models.optimizer import get_optimizer, get_scheduler
+from models.orchestrator import ModelOrchestratorBase
+from models.transforms import get_transform
 from objectives import Loss
 from runners.runner_base import Runner
 from study.configs.config_perturb_regularization import PerturbRegularzationConfig
 from study.configs.common import assert_choices, FlattenConfig, assert_list_choices, ensure_reproducible
 from study.utils import TrialConfig, get_device
-import json
 import os
 import shutil
 import logging
@@ -31,6 +33,8 @@ class RunnerConfigDict(TypedDict):
     result_path: Path
     run_num: int
     device: str
+    transform_train: v2.Transform
+    transform_test: v2.Transform
     logger: Logger
 
 
@@ -103,6 +107,10 @@ class TrainingConfig(FlattenConfig):
     early_stopping_tolerance: int = 0
     early_stopping_eval_metric: str = ""
 
+    is_canonical_transforms: bool = True
+    training_transforms: List[Dict] = field(default_factory=list)
+    testing_transforms: List[Dict] = field(default_factory=list)
+
     output: Path = field(default_factory=Path)
     is_collect_objective_values: bool = False
 
@@ -140,22 +148,38 @@ class TrainingConfig(FlattenConfig):
 class QuantizationConfig(FlattenConfig):
     """Configuration for quantization"""
     is_quantize: bool = False
-    quantization_type: str = "batched_kmeans"
-    quantization_device: str = "cpu"
+    quantization_type: str = "codebook"
+    quantization_method: str = "batched_kmeans"
+    quantization_kmeans_init: str = "uniform"
+    quantization_granularity: str = "network"
     quantization_kmeans_params: dict = field(default_factory=dict)
-    quantization_strategy: str = "nearest"
+    quantization_round_strategy: str = "nearest"
     quantize_levels: List[int] = field(default_factory=lambda: [4])
 
     def __post_init__(self):
+        assert_choices(self.quantization_granularity, "quantization_granularity", [
+            "network",
+            "layer",
+        ])
         assert_choices(self.quantization_type, "quantization_type", [
+            "linear",
+            "codebook"
+        ])
+        assert_choices(self.quantization_method, "quantization_method", [
             "kmeans",
             "batched_kmeans",
-            "kmeans_cuda"
+            "uniform_affine"
         ])
-        assert_choices(self.quantization_strategy, "quantization_strategy", [
+        assert_choices(self.quantization_round_strategy, "quantization_round_strategy", [
             "nearest",
             "up",
-            "down"
+            "down",
+            "stochastic"
+        ])
+        assert_choices(self.quantization_kmeans_init, "quantization_kmeans_init", [
+            "k-means++",
+            "random",
+            "uniform"
         ])
 
 @dataclass
@@ -168,6 +192,7 @@ class StudyConfig(FlattenConfig):
     epochs_test: int = -1
     logging_level: str = "info"
     is_record_loss: bool = False
+    load_checkpoint: Path = field(default_factory=Path)
 
     hpo_config: HPOConfig = field(default_factory=dict)
     training_config: TrainingConfig = field(default_factory=dict)
@@ -179,6 +204,7 @@ class StudyConfig(FlattenConfig):
         self.training_config = TrainingConfig(**self.training_config)
         self.quantization_config = QuantizationConfig(**self.quantization_config)
         self.perturb_regularization_config = PerturbRegularzationConfig(**self.perturb_regularization_config)
+        self.load_checkpoint = Path(self.load_checkpoint)
 
 
     def make_runner_config_dict(self, run_num=0, trial=None, trial_id=None) -> RunnerConfigDict:
@@ -190,44 +216,6 @@ class StudyConfig(FlattenConfig):
         ensure_reproducible(self.seed)
 
         runner_config = TrialConfig(runner_config, self.hpo_config.search_space, trial)
-
-        if trial is None and trial_id is not None: # If not a trial but id is given, load trial
-            result_path = Runner.runs_path(runner_config, trial_id)
-            result_config_path = result_path / "config.json"
-            with open(result_config_path, "r") as f:
-                checkpoint_config = json.load(f)["config"]
-            for c in checkpoint_config:
-                if c in runner_config and isinstance(runner_config[c], Path):
-                    continue
-                runner_config[c] = checkpoint_config[c]
-
-            run_path = result_path / "checkpoints" / str(run_num)
-        else:
-            if not trial_id:
-                trial_id = runner_config.config_to_id()
-
-            result_path = Runner.runs_path(runner_config, trial_id)
-            run_path = result_path / "checkpoints" / str(run_num)
-            if os.path.exists(run_path):
-                shutil.rmtree(run_path)
-            os.makedirs(run_path)
-
-
-        device = get_device(runner_config)
-        dataset = Dataset.get_dataset(runner_config)
-        model = get_model(dataset, runner_config)
-        model = model.to(device)
-        if runner_config["optimizer_type"] == "spsa":
-            objective = nn.CrossEntropyLoss(reduction="none")
-        else:
-            objective = Loss(model, runner_config)
-        optimizer = get_optimizer(
-            model,
-            objective,
-            device,
-            runner_config
-        )
-        scheduler = get_scheduler(optimizer, runner_config)
 
         logging_level = logging.NOTSET
         if self.logging_level == "debug":
@@ -245,9 +233,52 @@ class StudyConfig(FlattenConfig):
 
         logger = logging.getLogger("study_logger")
 
+
+        if not trial_id:
+            trial_id = runner_config.config_to_id()
+            logger.info(f"Trial not set, trial id is: {trial_id}")
+
+        result_path = Runner.runs_path(runner_config, trial_id)
+        run_path = result_path / "checkpoints" / str(run_num)
+        if os.path.exists(run_path):
+            shutil.rmtree(run_path)
+        os.makedirs(run_path)
+
+        device = get_device(runner_config)
+        dataset = Dataset.get_dataset(runner_config)
+        model = get_model(dataset, runner_config)
+
+        model.to(device)
+
+        orchestrator = ModelOrchestratorBase.get_orchestrator(
+            model,
+            result_path,
+            run_num,
+            logger,
+            runner_config,
+            device
+        )
+
+        if runner_config["load_checkpoint"]:
+            orchestrator.load_checkpoint("", runner_config["load_checkpoint"])
+
+        train_transforms, test_transforms = get_transform(runner_config)
+
+        if runner_config["optimizer_type"] == "spsa":
+            objective = nn.CrossEntropyLoss(reduction="none")
+        else:
+            objective = Loss(model, runner_config)
+        optimizer = get_optimizer(
+            model,
+            objective,
+            device,
+            runner_config
+        )
+        scheduler = get_scheduler(optimizer, runner_config)
+
         return RunnerConfigDict(
             trial_id=trial_id,
-            net=model,
+            net=orchestrator,
             optimizer=optimizer,
             dataset=dataset,
             scheduler=scheduler,
@@ -256,5 +287,7 @@ class StudyConfig(FlattenConfig):
             result_path=result_path,
             run_num=run_num,
             device=device,
+            transform_train=train_transforms,
+            transform_test=test_transforms,
             logger=logger
         )

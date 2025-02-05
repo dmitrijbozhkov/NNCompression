@@ -2,6 +2,8 @@ from typing import NamedTuple
 import torch
 import torch.nn as nn
 
+from models.orchestrator import ModelOutputs
+
 
 class LossHistory(NamedTuple):
     """Loss values to be saved in history"""
@@ -43,7 +45,7 @@ class Loss(nn.Module):
         self.cross_entropy = nn.CrossEntropyLoss()
 
 
-    def forward(self, x, y, perturbations=None):
+    def forward(self, model_outputs: ModelOutputs, labels: torch.Tensor):
         """
         Objective for training classification
 
@@ -52,12 +54,12 @@ class Loss(nn.Module):
         :param perturbations: Perturbed outputs
         :returns: Tuple of total loss and objective loss
         """
-        objective_loss = self.cross_entropy(x, y)
+        objective_loss = self.cross_entropy(model_outputs.forward_out, labels)
 
-        if perturbations is not None:
+        if model_outputs.perturbations is not None:
             perturb_objectives = []
-            for perturb_batch in perturbations:
-                perturb_objective = torch.abs(self.cross_entropy(perturb_batch, y) - objective_loss)
+            for perturb_batch in model_outputs.perturbations:
+                perturb_objective = torch.abs(self.cross_entropy(perturb_batch, labels) - objective_loss)
                 perturb_objectives.append(perturb_objective.unsqueeze(0))
             perturb_objectives = torch.cat(perturb_objectives)
             perturb_loss = torch.mean(perturb_objectives)
